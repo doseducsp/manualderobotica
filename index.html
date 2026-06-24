@@ -197,17 +197,27 @@
         } from 'firebase/firestore';
 
         // ==========================================
-        // ESTADO GLOBAL
+        // ESTADO GLOBAL E PERMISSÕES
         // ==========================================
+        
+        // LISTA DE E-MAILS AUTORIZADOS (CONTROLE DO FRONTEND)
+        const ALLOWED_EMAILS = [
+            'diego.gatto@servidor.educacao.sp.gov.br',
+            'paulo.gamuiero@servidor.educacao.sp.gov.br',
+            'roberto.rocha01@servidor.educacao.sp.gov.br',
+            'rodrigo.ferreira02@servidor.educacao.sp.gov.br',
+            'mariangela.rocha@servidor.educacao.sp.gov.br'
+        ];
+
         const state = {
             user: null,
-            isAdmin: false, // Controlado dinamicamente pelas regras de leitura do Firebase
+            isAdmin: false, // Controlado dinamicamente
             view: 'home',
             categorias: [],
             verbetes: [],
             feedbacks: [], 
-            contatos: [], // Fale Conosco
-            acessos: 0, // Contador de Acessos Real
+            contatos: [],
+            acessos: 0,
             searchQuery: '',
             selectedCategoryFilter: 'all',
             selectedItem: null,
@@ -218,7 +228,7 @@
             adminSortAZ: false,
             hasVotedCurrentItem: false, 
             showFeedbackInput: false,
-            activeStatsSubTab: 'pendentes' // 'pendentes', 'resolvidas', 'ignoradas'
+            activeStatsSubTab: 'pendentes'
         };
 
         // ==========================================
@@ -259,7 +269,7 @@
         }
 
         // ==========================================
-        // DIÁLOGOS CUSTOMIZADOS (PREVENÇÃO DE TRÁFEGO DE SANDBOX)
+        // DIÁLOGOS CUSTOMIZADOS
         // ==========================================
         window.customConfirm = (message, callback) => {
             const modal = document.getElementById('confirm-modal');
@@ -276,15 +286,8 @@
                 btnCancel.onclick = null;
             };
             
-            btnConfirm.onclick = () => {
-                cleanup();
-                callback(true);
-            };
-            
-            btnCancel.onclick = () => {
-                cleanup();
-                callback(false);
-            };
+            btnConfirm.onclick = () => { cleanup(); callback(true); };
+            btnCancel.onclick = () => { cleanup(); callback(false); };
         };
 
         window.customAlert = (title, message, isError = false) => {
@@ -307,12 +310,9 @@
             }
             
             modal.classList.remove('hidden');
-            closeBtn.onclick = () => {
-                modal.classList.add('hidden');
-            };
+            closeBtn.onclick = () => { modal.classList.add('hidden'); };
         };
 
-        // Modais de login customizados
         window.showLoginModal = () => {
             document.getElementById('login-modal').classList.remove('hidden');
         };
@@ -336,7 +336,7 @@
         };
 
         // ==========================================
-        // DECLARAÇÃO ATIVA DE FUNÇÕES DE RENDERIZAÇÃO E INTERAÇÃO
+        // DECLARAÇÃO ATIVA DE FUNÇÕES DE RENDERIZAÇÃO
         // ==========================================
         function updateNavbar() {
             document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -1145,7 +1145,7 @@
             state.isAdmin = false;
             signOut(auth);
             window.navigateTo('home');
-            window.customAlert("Acesso Recusado", "Sua conta do Google não possui permissões administrativas nas regras de segurança do Firebase.", true);
+            // Como temos a checagem no Frontend agora, isso atua como uma barreira final de segurança invisível.
         }
 
         // Incrementa visitação real persistente na nuvem (Fica somado "para sempre")
@@ -1270,7 +1270,16 @@
                     state.user = currentUser;
                     
                     if (currentUser && !currentUser.isAnonymous) {
-                        setupAdminListeners();
+                        const email = currentUser.email ? currentUser.email.toLowerCase().trim() : '';
+                        // "Segurança da Porta": Verifica no Front-end primeiro para bloquear imediatamente
+                        if (ALLOWED_EMAILS.includes(email)) {
+                            setupAdminListeners();
+                        } else {
+                            state.isAdmin = false;
+                            signOut(auth);
+                            window.customAlert("Acesso Negado", "Seu e-mail não possui privilégios de administrador.", true);
+                            window.navigateTo('home');
+                        }
                     } else {
                         state.isAdmin = false;
                         adminUnsubscribers.forEach(unsub => unsub());
