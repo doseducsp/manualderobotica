@@ -228,7 +228,8 @@
             adminSortAZ: false,
             hasVotedCurrentItem: false, 
             showFeedbackInput: false,
-            activeStatsSubTab: 'pendentes'
+            activeStatsSubTab: 'pendentes',
+            pendingAdminRedirect: false
         };
 
         // ==========================================
@@ -326,8 +327,10 @@
             if (auth) {
                 const provider = new GoogleAuthProvider();
                 try {
+                    state.pendingAdminRedirect = true;
                     await signInWithPopup(auth, provider);
                 } catch (err) {
+                    state.pendingAdminRedirect = false;
                     window.customAlert("Falha ao entrar", "Erro na autenticação: " + err.message, true);
                 }
             } else {
@@ -856,7 +859,11 @@
                 let adminList = [...state.verbetes];
                 
                 if (state.adminSearchQuery) {
-                    adminList = adminList.filter(v => v.nome.toLowerCase().includes(state.adminSearchQuery.toLowerCase()));
+                    const q = state.adminSearchQuery.toLowerCase();
+                    adminList = adminList.filter(v => 
+                        v.nome.toLowerCase().includes(q) || 
+                        v.categoria.toLowerCase().includes(q)
+                    );
                 }
 
                 if (state.adminSortAZ) {
@@ -870,16 +877,16 @@
                         <div class="flex items-center gap-4 w-full md:w-auto flex-1">
                             <div class="relative w-full max-w-sm">
                                 <i data-lucide="search" class="absolute left-3 top-3 w-5 h-5 text-slate-400"></i>
-                                <input type="text" placeholder="Pesquisar verbetes..." value="${state.adminSearchQuery}" oninput="window.updateAdminSearch(this.value)" 
-                                    class="w-full pl-10 pr-4 py-2 border-2 border-slate-200 rounded-xl outline-none focus:border-red-500 font-medium text-slate-700">
+                                <input type="text" placeholder="Pesquisar por nome ou categoria..." value="${state.adminSearchQuery}" oninput="window.updateAdminSearch(this.value)" 
+                                    class="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 font-medium text-slate-700 transition-all shadow-sm">
                             </div>
-                            <button onclick="window.toggleAdminSort()" class="flex items-center px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600 transition-colors whitespace-nowrap border-2 border-slate-200">
+                            <button onclick="window.toggleAdminSort()" class="flex items-center px-4 py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600 transition-colors whitespace-nowrap border-2 border-slate-200">
                                 <i data-lucide="arrow-up-down" class="w-4 h-4 mr-2"></i>
                                 ${state.adminSortAZ ? 'A-Z' : 'Recentes'}
                             </button>
                         </div>
-                        <button onclick="window.newVerbete()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl font-bold flex items-center transition-colors shadow-md w-full md:w-auto justify-center">
-                            <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Novo Item
+                        <button onclick="window.newVerbete()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-bold flex items-center transition-colors shadow-md w-full md:w-auto justify-center">
+                            <i data-lucide="plus" class="w-5 h-5 mr-2"></i> Novo Item
                         </button>
                     </div>
                     
@@ -1116,8 +1123,14 @@
                     state.feedbacks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     // Conexão bem-sucedida! Significa que o usuário é um Administrador válido nas regras do Firebase.
                     state.isAdmin = true;
-                    updateNavbar();
-                    renderView();
+                    
+                    if (state.pendingAdminRedirect) {
+                        state.pendingAdminRedirect = false;
+                        window.navigateTo('admin');
+                    } else {
+                        updateNavbar();
+                        renderView();
+                    }
                 }, (err) => {
                     console.warn("Acesso administrativo negado pelo Firebase Rules (feedbacks):", err);
                     handleAdminPermissionDenied();
