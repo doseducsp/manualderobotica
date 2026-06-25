@@ -53,6 +53,12 @@
         /* Oculta views inativas */
         .view-hidden { display: none !important; }
 
+        /* Scrollbar customizada leve */
+        .custom-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
         /* Estilos para Impressão limpa do Verbete */
         @media print {
             body { background-color: white !important; color: black !important; }
@@ -182,6 +188,14 @@
                 <i data-lucide="log-in" class="w-5 h-5 mr-2"></i> Entrar com Google
             </button>
             <button onclick="window.hideLoginModal()" class="text-slate-400 hover:text-slate-600 font-bold text-sm">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Lightbox de Imagem/Vídeo (Zoom) -->
+    <div id="lightbox-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/95 backdrop-blur-md hidden no-print" onclick="window.closeLightbox()">
+        <button class="absolute top-6 right-6 text-slate-300 hover:text-white transition transform hover:scale-110" title="Fechar"><i data-lucide="x" class="w-10 h-10"></i></button>
+        <div id="lightbox-content" class="w-full max-w-5xl max-h-[90vh] p-4 flex justify-center items-center pointer-events-auto" onclick="event.stopPropagation()">
+            <!-- Conteúdo injetado via JS -->
         </div>
     </div>
 
@@ -320,6 +334,34 @@
 
         window.hideLoginModal = () => {
             document.getElementById('login-modal').classList.add('hidden');
+        };
+
+        window.getYoutubeId = (url) => {
+            if (!url) return '';
+            if (url.includes('youtube.com/watch?v=')) return new URL(url).searchParams.get('v');
+            if (url.includes('youtu.be/')) return url.split('youtu.be/')[1].split('?')[0];
+            if (url.includes('youtube.com/embed/')) return url.split('youtube.com/embed/')[1].split('?')[0];
+            return '';
+        };
+
+        window.getEmbedUrl = (url) => {
+            const vid = window.getYoutubeId(url);
+            return vid ? `https://www.youtube.com/embed/${vid}` : url;
+        };
+
+        window.openLightbox = (src, isVideo) => {
+            const content = document.getElementById('lightbox-content');
+            if (isVideo) {
+                content.innerHTML = `<iframe src="${src}?autoplay=1" class="w-full aspect-video rounded-2xl shadow-2xl bg-black" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+            } else {
+                content.innerHTML = `<img src="${src}" class="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain bg-white/5 p-2" />`;
+            }
+            document.getElementById('lightbox-modal').classList.remove('hidden');
+        };
+
+        window.closeLightbox = () => {
+            document.getElementById('lightbox-modal').classList.add('hidden');
+            document.getElementById('lightbox-content').innerHTML = ''; // Interrompe reprodução do vídeo se estiver tocando
         };
 
         window.confirmAdminLogin = async () => {
@@ -540,15 +582,36 @@
             let mediaHTML = '';
             if (item.imagemOuVideo) {
                 if (isVideo) {
+                    const embedUrl = window.getEmbedUrl(item.imagemOuVideo);
                     mediaHTML = `
-                        <div class="w-full aspect-video rounded-2xl overflow-hidden mt-6 mb-8 bg-slate-800 flex flex-col items-center justify-center relative shadow-lg print-break-inside-avoid">
-                            <i data-lucide="video" class="w-16 h-16 text-white/50 mb-2"></i>
-                            <a href="${item.imagemOuVideo}" target="_blank" class="text-blue-400 hover:text-blue-300 font-bold bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm z-10 hover:bg-white/20 transition">Acessar Vídeo Tutorial</a>
+                        <div class="w-full aspect-video rounded-2xl overflow-hidden mt-6 mb-4 bg-black flex flex-col items-center justify-center relative shadow-lg print-break-inside-avoid">
+                            <iframe class="w-full h-full" src="${embedUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                         </div>
                     `;
                 } else {
-                    mediaHTML = `<img src="${item.imagemOuVideo}" alt="${item.nome}" class="w-full rounded-2xl mt-6 mb-8 shadow-lg object-contain max-h-[500px] print-break-inside-avoid" />`;
+                    mediaHTML = `<img src="${item.imagemOuVideo}" alt="${item.nome}" class="w-full rounded-2xl mt-6 mb-4 shadow-lg object-contain max-h-[500px] print-break-inside-avoid cursor-pointer hover:opacity-90 transition" onclick="window.openLightbox('${item.imagemOuVideo}', false)" title="Clique para ampliar" />`;
                 }
+            }
+
+            // --- Mídias Secundárias (Thumbnail Inline) ---
+            const secMedia = [item.midia2, item.midia3, item.midia4].filter(Boolean);
+            if (secMedia.length > 0) {
+                mediaHTML += `<div class="flex gap-4 overflow-x-auto pb-4 mb-4 custom-scrollbar print-break-inside-avoid">`;
+                secMedia.forEach(m => {
+                    const isVid = m.includes('youtube') || m.includes('youtu.be');
+                    if (isVid) {
+                        const embedUrl = window.getEmbedUrl(m);
+                        const thumbUrl = `https://img.youtube.com/vi/${window.getYoutubeId(m)}/0.jpg`;
+                        mediaHTML += `
+                            <div class="w-32 h-24 sm:w-40 sm:h-28 flex-shrink-0 bg-slate-900 rounded-xl flex items-center justify-center cursor-pointer hover:opacity-80 transition relative shadow-sm border-2 border-slate-200" onclick="window.openLightbox('${embedUrl}', true)" title="Assistir Vídeo">
+                                <i data-lucide="play-circle" class="text-white w-10 h-10 absolute z-10 drop-shadow-md"></i>
+                                <img src="${thumbUrl}" class="w-full h-full object-cover rounded-lg opacity-60" onerror="this.style.display='none'"/>
+                            </div>`;
+                    } else {
+                        mediaHTML += `<img src="${m}" class="w-32 h-24 sm:w-40 sm:h-28 flex-shrink-0 object-cover rounded-xl shadow-sm border-2 border-slate-200 cursor-pointer hover:opacity-80 transition" onclick="window.openLightbox('${m}', false)" title="Clique para ampliar" />`;
+                    }
+                });
+                mediaHTML += `</div>`;
             }
 
             let feedbackWidgetHTML = "";
@@ -632,6 +695,18 @@
                             <section class="print-break-inside-avoid no-print pt-4">
                                 ${feedbackWidgetHTML}
                             </section>
+
+                            <!-- VEJA TAMBÉM (RELACIONADOS) -->
+                            ${(item.habilitarRelacionados && item.relacionados && item.relacionados.length > 0) ? `
+                            <section class="print-break-inside-avoid pt-8 mt-8 border-t-2 border-slate-100">
+                                <h3 class="text-2xl font-extrabold text-slate-800 mb-6 flex items-center">
+                                    <i data-lucide="link" class="w-6 h-6 mr-2 text-blue-500"></i> Veja também verbetes relacionados:
+                                </h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    ${state.verbetes.filter(v => item.relacionados.includes(v.id)).map(v => generateCardHTML(v)).join('')}
+                                </div>
+                            </section>
+                            ` : ''}
 
                             <!-- BOTÕES DE AÇÃO -->
                             <section class="flex flex-col sm:flex-row gap-4 pt-6 mt-6 border-t-2 border-slate-100 no-print">
@@ -806,6 +881,18 @@
                 const i = state.editingItem;
                 const catOptions = state.categorias.map(c => `<option value="${c.nome}" ${c.nome === i.categoria ? 'selected' : ''}>${c.nome}</option>`).join('');
 
+                // Preparar checkboxes de verbetes relacionados
+                const relList = i.relacionados || [];
+                const otherVerbetes = state.verbetes.filter(v => v.id !== i.id).sort((a,b) => a.nome.localeCompare(b.nome));
+                const relatedCheckboxes = otherVerbetes.map(v => `
+                    <label class="flex items-center space-x-3 p-2 hover:bg-slate-100 rounded-lg cursor-pointer transition">
+                        <input type="checkbox" name="relacionados" value="${v.id}" ${relList.includes(v.id) ? 'checked' : ''} class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                        <span class="text-sm font-medium text-slate-700">${v.nome}</span>
+                    </label>
+                `).join('');
+
+                const hasSecondaryMedia = i.midia2 || i.midia3 || i.midia4;
+
                 mainContent = `
                     <form onsubmit="window.saveVerbete(event)" class="space-y-6">
                         <div class="flex justify-between items-center mb-4 border-b-2 border-slate-100 pb-4">
@@ -833,66 +920,54 @@
                                 <label class="block text-sm font-bold text-slate-700 mb-2">Exemplo de Uso</label>
                                 <textarea name="exemploUso" rows="2" class="w-full border-2 border-slate-200 rounded-xl p-3 focus:border-blue-500 outline-none font-medium text-slate-700">${i.exemploUso || ''}</textarea>
                             </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-bold text-slate-700 mb-2">URL da Imagem ou Vídeo (YouTube)</label>
-                                <input name="imagemOuVideo" value="${i.imagemOuVideo || ''}" placeholder="Ex: https://youtube.com/..." class="w-full border-2 border-slate-200 rounded-xl p-3 focus:border-blue-500 outline-none font-medium text-slate-700" />
+
+                            <!-- SEÇÃO DE MÍDIAS -->
+                            <div class="md:col-span-2 bg-slate-50 border-2 border-slate-200 rounded-2xl p-5 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-800 mb-2 flex items-center"><i data-lucide="image" class="w-5 h-5 mr-2 text-blue-500"></i> Mídia Principal (Obrigatória)</label>
+                                    <input name="imagemOuVideo" value="${i.imagemOuVideo || ''}" required placeholder="URL da imagem ou vídeo do YouTube" class="w-full border-2 border-slate-200 rounded-xl p-3 focus:border-blue-500 outline-none font-medium text-slate-700" />
+                                </div>
+                                
+                                ${!hasSecondaryMedia ? `
+                                    <button type="button" onclick="document.getElementById('secondary-media-wrapper').classList.remove('hidden'); this.style.display='none'" class="flex items-center text-blue-600 font-bold hover:text-blue-800 transition py-2">
+                                        <i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i> Adicionar Mídias Secundárias (Até 3 Extras)
+                                    </button>
+                                ` : ''}
+
+                                <div id="secondary-media-wrapper" class="${hasSecondaryMedia ? '' : 'hidden'} space-y-3 pt-3 border-t-2 border-slate-200 border-dashed">
+                                    <h4 class="text-sm font-bold text-slate-600">Mídias Secundárias (Opcionais)</h4>
+                                    <input name="midia2" value="${i.midia2 || ''}" placeholder="2ª Mídia (URL)" class="w-full border-2 border-slate-200 rounded-xl p-3 focus:border-blue-500 outline-none font-medium text-slate-700" />
+                                    <input name="midia3" value="${i.midia3 || ''}" placeholder="3ª Mídia (URL)" class="w-full border-2 border-slate-200 rounded-xl p-3 focus:border-blue-500 outline-none font-medium text-slate-700" />
+                                    <input name="midia4" value="${i.midia4 || ''}" placeholder="4ª Mídia (URL)" class="w-full border-2 border-slate-200 rounded-xl p-3 focus:border-blue-500 outline-none font-medium text-slate-700" />
+                                </div>
                             </div>
-                            <div class="md:col-span-2 bg-purple-50 p-4 rounded-xl border border-purple-100">
+
+                            <div class="md:col-span-2 bg-purple-50 p-5 rounded-2xl border-2 border-purple-100">
                                 <label class="block text-sm font-bold text-purple-800 mb-2 flex items-center">
-                                    <i data-lucide="code" class="w-4 h-4 mr-2"></i> Link de Programação de Teste (MakeCode)
+                                    <i data-lucide="code" class="w-5 h-5 mr-2"></i> Link de Programação de Teste (MakeCode)
                                 </label>
-                                <p class="text-xs text-purple-600 mb-2 font-medium">Insira a URL apenas se for um Componente/Sensor programável.</p>
+                                <p class="text-xs text-purple-600 mb-3 font-medium">Insira a URL apenas se for um Componente/Sensor programável.</p>
                                 <input name="linkMakeCode" value="${i.linkMakeCode || ''}" placeholder="Ex: https://makecode.microbit.org/..." class="w-full border-2 border-purple-200 rounded-xl p-3 focus:border-purple-500 outline-none font-medium text-slate-700" />
+                            </div>
+
+                            <!-- SEÇÃO VEJA TAMBÉM -->
+                            <div class="md:col-span-2 bg-slate-50 border-2 border-slate-200 rounded-2xl p-5">
+                                <label class="flex items-center space-x-3 cursor-pointer mb-4">
+                                    <input type="checkbox" name="habilitarRelacionados" id="toggle-relacionados" ${i.habilitarRelacionados ? 'checked' : ''} class="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" onchange="document.getElementById('related-items-wrapper').classList.toggle('hidden', !this.checked)">
+                                    <span class="text-base font-extrabold text-slate-800 flex items-center"><i data-lucide="link" class="w-5 h-5 mr-2 text-blue-500"></i> Habilitar Seção "Veja Também"</span>
+                                </label>
+                                
+                                <div id="related-items-wrapper" class="${i.habilitarRelacionados ? '' : 'hidden'}">
+                                    <p class="text-xs text-slate-500 font-bold uppercase mb-2">Selecione os verbetes relacionados:</p>
+                                    <div class="bg-white border-2 border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto custom-scrollbar">
+                                        ${relatedCheckboxes.length > 0 ? relatedCheckboxes : '<p class="text-sm text-slate-400 p-2">Não há outros verbetes cadastrados.</p>'}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <div class="pt-6">
-                            <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-colors">
-                                <i data-lucide="save" class="w-5 h-5 mr-2"></i> Salvar Verbete
-                            </button>
-                        </div>
-                    </form>
-                `;
-
-            // 3. LISTA PRINCIPAL DE VERBETES
-            } else if (state.activeAdminTab === 'verbetes') {
-                let adminList = [...state.verbetes];
-                
-                if (state.adminSearchQuery) {
-                    const q = state.adminSearchQuery.toLowerCase();
-                    adminList = adminList.filter(v => 
-                        v.nome.toLowerCase().includes(q) || 
-                        v.categoria.toLowerCase().includes(q)
-                    );
-                }
-
-                if (state.adminSortAZ) {
-                    adminList.sort((a,b) => a.nome.localeCompare(b.nome));
-                } else {
-                    adminList.sort((a,b) => (b.dataCriacao || '').localeCompare(a.dataCriacao || ''));
-                }
-
-                mainContent = `
-                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                        <div class="flex items-center gap-4 w-full md:w-auto flex-1">
-                            <div class="relative w-full max-w-sm">
-                                <i data-lucide="search" class="absolute left-3 top-3 w-5 h-5 text-slate-400"></i>
-                                <input type="text" placeholder="Pesquisar por nome ou categoria..." value="${state.adminSearchQuery}" oninput="window.updateAdminSearch(this.value)" 
-                                    class="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 font-medium text-slate-700 transition-all shadow-sm">
-                            </div>
-                            <button onclick="window.toggleAdminSort()" class="flex items-center px-4 py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600 transition-colors whitespace-nowrap border-2 border-slate-200">
-                                <i data-lucide="arrow-up-down" class="w-4 h-4 mr-2"></i>
-                                ${state.adminSortAZ ? 'A-Z' : 'Recentes'}
-                            </button>
-                        </div>
-                        <button onclick="window.newVerbete()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-bold flex items-center transition-colors shadow-md w-full md:w-auto justify-center">
-                            <i data-lucide="plus" class="w-5 h-5 mr-2"></i> Novo Item
-                        </button>
-                    </div>
-                    
-                    <div class="overflow-x-auto rounded-xl border-2 border-slate-100">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
+                            <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-colors shadow-md">
                                 <tr class="bg-slate-50 border-b-2 border-slate-200 text-slate-500 text-sm">
                                     <th class="p-4 font-bold">Nome do Verbete</th>
                                     <th class="p-4 font-bold">Categoria</th>
@@ -1530,6 +1605,11 @@
                 descricao: fd.get('descricao'),
                 exemploUso: fd.get('exemploUso'),
                 imagemOuVideo: fd.get('imagemOuVideo'),
+                midia2: fd.get('midia2') || '',
+                midia3: fd.get('midia3') || '',
+                midia4: fd.get('midia4') || '',
+                habilitarRelacionados: fd.get('habilitarRelacionados') === 'on',
+                relacionados: fd.getAll('relacionados') || [],
                 linkMakeCode: fd.get('linkMakeCode'), 
                 dataCriacao: state.editingItem.dataCriacao || new Date().toISOString(),
                 ultimaAtualizacao: new Date().toISOString()
